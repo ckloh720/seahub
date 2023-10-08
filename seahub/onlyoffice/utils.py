@@ -199,5 +199,6 @@ def get_onlyoffice_dict(request, username, repo_id, file_path, file_id='',
             config['editorConfig']['customization']['anonymous'] = anonymous_dict
 
         return_dict['onlyoffice_jwt_token'] = jwt.encode(config, ONLYOFFICE_JWT_SECRET)
+        return_dict['onlyoffice_jwt_secret'] = ONLYOFFICE_JWT_SECRET
 
     return return_dict

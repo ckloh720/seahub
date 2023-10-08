@@ -939,9 +939,11 @@ if getattr(settings, 'ENABLE_MULTI_ADFS', False) or getattr(settings, 'ENABLE_AD
 if getattr(settings, 'ENABLE_ONLYOFFICE', False):
     from seahub.onlyoffice.views import onlyoffice_editor_callback
     from seahub.onlyoffice.views import OnlyofficeConvert
+    from seahub.onlyoffice.views import OnlyofficeFileHistory
     urlpatterns += [
         path('onlyoffice/editor-callback/', onlyoffice_editor_callback, name='onlyoffice_editor_callback'),
         path('onlyoffice-api/convert/', OnlyofficeConvert.as_view(), name='onlyoffice_api_convert'),
+        path('onlyoffice-api/file-history/', OnlyofficeFileHistory.as_view(), name='onlyoffice_api_file_history'),
     ]
 
 if getattr(settings, 'ENABLE_BISHENG_OFFICE', False):

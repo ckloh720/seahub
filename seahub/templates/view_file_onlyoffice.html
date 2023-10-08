@@ -18,9 +18,76 @@ html, body { padding:0; margin:0; height:100%; }
 <script type="text/javascript" src="{% static "scripts/lib/jquery.min.js" %}"></script>
 <script type="text/javascript" src="{{ MEDIA_URL }}js/jq.min.js"></script>
 <script type="text/javascript" src="{{ MEDIA_URL }}js/base.js?t=1536127546642"></script>
+<script type="text/javascript" src="{{ MEDIA_URL }}js/jsonwebtoken.bundle.js"></script>
 <script type="text/javascript" src="{{ ONLYOFFICE_APIJS_URL }}"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/3.1.9-1/crypto-js.js"></script>
 <script type="text/javascript">
+    var onRequestHistory = function() {
+        $.ajax({
+            url: '{% url "api-v2.1-new-file-history-view" repo_id %}' + '?path={{path|urlencode}}',
+            type: 'GET',
+            dataType: 'json',
+            cache: false,
+            success: function(resp) {
+                var history = [];
+                resp.data.reverse().forEach (function (item) {
+                    history.push({
+                        "created": item.ctime,
+                        "key": item.rev_file_id,
+                        "user": {
+                            "id": item.creator_email,
+                            "name": item.creator_name
+                        },
+                        "version": item.rev_file_id
+                    });
+                });
+                docEditor.refreshHistory({
+                    "currentVersion": history.at(-1).version,
+                    "history": history
+                });
+            }
+        });
+    };
+    var onRequestHistoryData = function(event) {
+        var version = event.data;
+        var payload = {
+            "key": version,
+            "url": "{{service_url}}/onlyoffice-api/file-history/?repo_id={{repo_id}}&path={{path|urlencode}}" + "&obj_id=" + version,
+            "version": version
+        }
+        payload_json_string = JSON.stringify(payload);
+        const secretKey = '{{ onlyoffice_jwt_secret }}';
+
+        function base64UrlEncode(str) {
+          var encodedSource = CryptoJS.enc.Base64.stringify(str);
+          var reg = new RegExp('/', 'g');
+          encodedSource = encodedSource.replace(/=+$/, '').replace(/\+/g, '-').replace(reg, '_');
+          return encodedSource;
+        }
+
+        let header = JSON.stringify({
+          "alg": "HS256",
+          "typ": "JWT"
+        });
+
+        let before_sign = base64UrlEncode(CryptoJS.enc.Utf8.parse(header)) + '.' + base64UrlEncode(CryptoJS.enc.Utf8.parse(payload_json_string));
+        let signature = CryptoJS.HmacSHA256(before_sign, secretKey);
+        let token = before_sign + '.' + base64UrlEncode(signature);
+
+        payload['token'] = token;
+        console.log(payload);
+
+        docEditor.setHistoryData(payload)
+    };
+    var onRequestHistoryClose = function () {
+        document.location.reload();
+    };
     var config = {
+        "events": {
+            "onRequestHistory": onRequestHistory,
+            "onRequestHistoryData": onRequestHistoryData,
+            "onRequestHistoryClose": onRequestHistoryClose,
+        },
         "type": window.screen.width < 992 ? 'mobile' : 'desktop',
         "document": {
             "fileType": "{{ file_type }}",

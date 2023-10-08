@@ -295,3 +295,72 @@ class OnlyofficeConvert(APIView):
         result['file_path'] = posixpath.join(parent_dir, file_name)
 
         return Response(result)
+
+
+class OnlyofficeFileHistory(APIView):
+
+    throttle_classes = (UserRateThrottle,)
+
+    def get(self, request):
+
+        import jwt
+        from seahub.onlyoffice.settings import ONLYOFFICE_JWT_SECRET
+        from rest_framework import status
+        from seahub.api2.utils import api_error
+
+        bearer_string = request.headers.get('authorization', '')
+        if not bearer_string:
+            logger.error('No authentication header.')
+            error_msg = 'No authentication header.'
+            return api_error(status.HTTP_403_FORBIDDEN, error_msg)
+
+        bearer_list = bearer_string.split()
+        if len(bearer_list) != 2 or bearer_list[0].lower() != 'bearer':
+            logger.error(f'Bearer {bearer_string} invalid')
+            error_msg = 'Bearer invalid.'
+            return api_error(status.HTTP_403_FORBIDDEN, error_msg)
+
+        token = bearer_list[1]
+        try:
+            payload = jwt.decode(token, ONLYOFFICE_JWT_SECRET, algorithms=['HS256'])
+        except Exception as e:
+            logger.error(e)
+            logger.error(token)
+            error_msg = 'Encode bearer failed.'
+            return api_error(status.HTTP_403_FORBIDDEN, error_msg)
+
+        payload = payload.get('payload')
+        if not payload:
+            logger.error(payload)
+            error_msg = 'Payload invalid.'
+            return api_error(status.HTTP_400_BAD_REQUEST, error_msg)
+
+        url = payload.get('url')
+        if not url:
+            logger.error(payload)
+            error_msg = 'No url in payload.'
+            return api_error(status.HTTP_400_BAD_REQUEST, error_msg)
+
+        import urllib.parse
+        parsed_url = urllib.parse.urlparse(url)
+        query_parameters = urllib.parse.parse_qs(parsed_url.query)
+        repo_id = query_parameters.get('repo_id')[0]
+        file_path = query_parameters.get('path')[0]
+        obj_id = query_parameters.get('obj_id')[0]
+
+        if not repo_id or not file_path or not obj_id:
+            logger.error(url)
+            error_msg = 'url invalid.'
+            return api_error(status.HTTP_400_BAD_REQUEST, error_msg)
+
+        file_name = os.path.basename(file_path)
+        fileserver_token = seafile_api.get_fileserver_access_token(repo_id,
+                                                                   obj_id,
+                                                                   'view',
+                                                                   '',
+                                                                   use_onetime=False)
+
+        from seahub.utils import gen_inner_file_get_url
+        inner_path = gen_inner_file_get_url(fileserver_token, file_name)
+        file_content = urllib.request.urlopen(inner_path).read()
+        return HttpResponse(file_content, content_type="application/octet-stream")
